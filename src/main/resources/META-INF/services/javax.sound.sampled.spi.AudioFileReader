@@ -1,1 +1,2 @@
 net.sourceforge.jaad.spi.javasound.AACAudioFileReader
+net.sourceforge.jaad.spi.javasound.TSAudioFileReader
