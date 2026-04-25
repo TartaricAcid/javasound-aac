@@ -38,7 +38,6 @@ test {
 
 java {
     withSourcesJar()
-    withJavadocJar()
 }
 
 publishing {
@@ -98,4 +97,8 @@ javadoc {
     if (JavaVersion.current().isJava9Compatible()) {
         options.addBooleanOption('html5', true)
     }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
 }
