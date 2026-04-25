@@ -175,11 +175,31 @@ public class TSAudioFileReader extends AudioFileReader {
 
     @Override
     public AudioInputStream getAudioInputStream(File file) throws UnsupportedAudioFileException, IOException {
-        return getAudioInputStream(new BufferedInputStream(Files.newInputStream(file.toPath())));
+        final InputStream is = new BufferedInputStream(Files.newInputStream(file.toPath()));
+        try {
+            return getAudioInputStream(is);
+        } catch (Throwable e) {
+            closeSilently(is);
+            throw e;
+        }
     }
 
     @Override
     public AudioInputStream getAudioInputStream(URL url) throws UnsupportedAudioFileException, IOException {
-        return getAudioInputStream(new BufferedInputStream(url.openStream()));
+        final InputStream is = new BufferedInputStream(url.openStream());
+        try {
+            return getAudioInputStream(is);
+        } catch (Throwable e) {
+            closeSilently(is);
+            throw e;
+        }
+    }
+
+    private static void closeSilently(final InputStream is) {
+        try {
+            is.close();
+        } catch (final IOException ignored) {
+            // IOException is ignored
+        }
     }
 }
