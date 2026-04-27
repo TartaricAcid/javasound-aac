@@ -95,10 +95,6 @@ public class M3U8InputStream extends InputStream {
             return;
         }
 
-        // 在没有读取到时长数据以前，默认每 5 秒刷新一次
-        // 后续会根据 m3u8 文件中的 TARGET DURATION 动态调整刷新频率
-        long nextRefreshDelayMs = 5000;
-
         try {
             M3U8Playlist playlist = M3U8Parser.fetchPlaylist(httpClient, masterUrl);
             for (String url : playlist.getNewTsUrls()) {
@@ -119,14 +115,17 @@ public class M3U8InputStream extends InputStream {
                 return;
             }
 
-            nextRefreshDelayMs = playlist.getTargetDurationMs();
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        } catch (Exception e) {
-            nextRefreshDelayMs = 10_000;
-        } finally {
+            // 如果还没有关闭且可能还有新分片，继续调度下一次刷新和下载任务
             if (!isClosed && !noMoreSegments) {
+                // 根据 m3u8 文件中的 TARGET DURATION 动态调整刷新频率
+                long nextRefreshDelayMs = playlist.getTargetDurationMs();
                 scheduler.schedule(this::refreshAndDownloadTask, nextRefreshDelayMs, TimeUnit.MILLISECONDS);
+            }
+        } catch (Throwable e) {
+            // 任何异常，立即关闭
+            try {
+                this.close();
+            } catch (Throwable ignore) {
             }
         }
     }

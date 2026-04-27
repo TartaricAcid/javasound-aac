@@ -13,7 +13,6 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class M3U8Parser {
-    private static final int MAX_TS_RETRIES = 3;
     private static final Duration M3U8_TIMEOUT = Duration.ofSeconds(5);
     private static final Duration TS_TIMEOUT = Duration.ofSeconds(10);
     private static final String USER_AGENT = """
@@ -87,26 +86,13 @@ public class M3U8Parser {
         HttpRequest request = HttpRequest.newBuilder(URI.create(tsUrl))
                 .timeout(TS_TIMEOUT).header("User-Agent", USER_AGENT)
                 .GET().build();
-
-        for (int attempt = 1; attempt <= MAX_TS_RETRIES; attempt++) {
-            try {
-                // 直接将整个 TS 分片下载为 byte[] 数组
-                // 一个 TS 通常只有几百 KB 到 2MB，完全在堆内存可控范围内
-                HttpResponse<byte[]> response = client.send(request, BodyHandlers.ofByteArray());
-                if (response.statusCode() == 200) {
-                    return new ByteArrayInputStream(response.body());
-                }
-                // 异常 HTTP 状态码，准备进入下一次重试
-            } catch (IOException ignore) {
-            }
-
-            if (attempt < MAX_TS_RETRIES) {
-                // 等待 500ms 重试
-                Thread.sleep(500);
-            }
+        // 直接将整个 TS 分片下载为 byte[] 数组
+        // 一个 TS 通常只有几百 KB 到 2MB，完全在堆内存可控范围内
+        HttpResponse<byte[]> response = client.send(request, BodyHandlers.ofByteArray());
+        if (response.statusCode() == 200) {
+            return new ByteArrayInputStream(response.body());
         }
-
-        // 所有重试都失败了，抛出异常
-        throw new IOException("Failed to download TS segment after " + MAX_TS_RETRIES + " attempts: " + tsUrl);
+        // 抛出异常
+        throw new IOException("Failed to fetch TS segment, HTTP code: " + response.statusCode() + ", URL: " + tsUrl);
     }
 }
