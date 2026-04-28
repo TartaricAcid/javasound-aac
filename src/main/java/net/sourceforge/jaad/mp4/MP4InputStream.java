@@ -219,11 +219,11 @@ public abstract class MP4InputStream extends InputStream {
 		final byte[] b = new byte[max];
 		int pos = 0;
 		int i = 0;
-		while(pos<max&&i!=-1) {
+		do {
 			i = readByte();
-			if(i!=-1)
+			if (i != -1 && i != terminator)
 				b[pos++] = (byte) i;
-		}
+		} while (pos < max && i != -1 && i != terminator);
 		return Arrays.copyOf(b, pos);
 	}
 

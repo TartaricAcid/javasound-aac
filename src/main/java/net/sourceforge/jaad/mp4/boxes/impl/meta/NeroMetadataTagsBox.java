@@ -28,7 +28,7 @@ public class NeroMetadataTagsBox extends BoxImpl {
 			key = in.readUTFString((int) getLeft(in), MP4InputStream.UTF8);
 			in.skipBytes(4); //0x00 0x01 0x00 0x00 0x00
 			len = in.readByte();
-			val = in.readString(len);
+			val = in.readUTFString(len, MP4InputStream.UTF8);
 			pairs.put(key, val);
 		}
 	}
