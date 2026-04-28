@@ -1,5 +1,6 @@
 package net.sourceforge.jaad.m3u8;
 
+import java.net.URI;
 import java.util.List;
 
 public class M3U8Playlist {
@@ -21,9 +22,9 @@ public class M3U8Playlist {
     /**
      * 提取出来的 TS 分片真实下载地址
      */
-    private final List<String> tsUrls;
+    private final List<URI> tsUrls;
 
-    public M3U8Playlist(int targetDurationSec, boolean isLive, long mediaSequence, List<String> tsUrls) {
+    public M3U8Playlist(int targetDurationSec, boolean isLive, long mediaSequence, List<URI> tsUrls) {
         // HLS 协议里的 TARGET DURATION 是秒，我们转成毫秒方便线程 sleep
         this.targetDurationMs = targetDurationSec > 0 ? targetDurationSec * 1000 : 5000;
         this.isLive = isLive;
@@ -43,7 +44,7 @@ public class M3U8Playlist {
         return mediaSequence;
     }
 
-    public List<String> getNewTsUrls() {
+    public List<URI> getNewTsUrls() {
         return tsUrls;
     }
 }

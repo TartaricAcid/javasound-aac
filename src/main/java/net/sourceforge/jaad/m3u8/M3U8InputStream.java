@@ -2,28 +2,19 @@ package net.sourceforge.jaad.m3u8;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.URI;
 import java.net.http.HttpClient;
-import java.time.Duration;
+import java.net.http.HttpRequest;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Function;
+import java.util.function.Supplier;
 
 public class M3U8InputStream extends InputStream {
-    /**
-     * 默认提供的 HttpClient，但还是建议自行自定义一个，方便设置各种参数
-     */
-    private static final HttpClient DEFAULT_CLIENT = HttpClient.newBuilder()
-            .version(HttpClient.Version.HTTP_2)
-            .followRedirects(HttpClient.Redirect.NORMAL)
-            .connectTimeout(Duration.ofSeconds(5)).build();
-
-    /**
-     * 主链接，必须是 m3u8 文件的 URL，后续会从这个链接解析出 TS 分片链接并下载数据流
-     */
-    private final String masterUrl;
     /**
      * 阻塞队列用于存储下载好的 TS 分片数据流，容量限制为 5 个分片，防止内存占用过高
      */
@@ -31,10 +22,10 @@ public class M3U8InputStream extends InputStream {
     /**
      * 记录已经下载过的 TS 链接，防止重复下载
      */
-    private final Set<String> processedUrls = Collections.newSetFromMap(
+    private final Set<URI> processedUrls = Collections.newSetFromMap(
             Collections.synchronizedMap(new LinkedHashMap<>(64, 0.75f, true) {
                 @Override
-                protected boolean removeEldestEntry(Map.Entry<String, Boolean> eldest) {
+                protected boolean removeEldestEntry(Map.Entry<URI, Boolean> eldest) {
                     // 仅保留最近的 50 个切片记录，防止 OOM
                     return size() > 50;
                 }
@@ -45,6 +36,17 @@ public class M3U8InputStream extends InputStream {
      *
      */
     private final HttpClient httpClient;
+    /**
+     * 获取 m3u8 文件的 HTTP 请求构造器，外部提供，允许灵活配置请求头等参数
+     */
+    private final Supplier<HttpRequest> playlistRequest;
+    /**
+     * 获取 ts 分片数据流的 HTTP 请求构造器，外部提供，允许灵活配置请求头等参数
+     * <p>
+     * 其中传递的 URI 为解析 m3u8 文件后得到的 ts 分片链接 <br>
+     * 外部可以根据需要构造不同的请求（例如添加 Referer 或 User-Agent）
+     */
+    private final Function<URI, HttpRequest> tsSegmentRequest;
     /**
      * 当前正在读取的 TS 分片数据流，读完后会自动切换到下一个分片，保持连续播放
      */
@@ -62,16 +64,13 @@ public class M3U8InputStream extends InputStream {
      */
     private volatile boolean noMoreSegments = false;
 
-    public M3U8InputStream(HttpClient httpClient, String m3u8Url) {
-        this.masterUrl = m3u8Url;
+    public M3U8InputStream(HttpClient httpClient, Supplier<HttpRequest> playlistRequest, Function<URI, HttpRequest> tsSegmentRequest) {
         this.httpClient = httpClient;
+        this.playlistRequest = playlistRequest;
+        this.tsSegmentRequest = tsSegmentRequest;
 
         // 初始化线程池
         this.initScheduler();
-    }
-
-    public M3U8InputStream(String m3u8Url) {
-        this(DEFAULT_CLIENT, m3u8Url);
     }
 
     private void initScheduler() {
@@ -96,16 +95,16 @@ public class M3U8InputStream extends InputStream {
         }
 
         try {
-            M3U8Playlist playlist = M3U8Parser.fetchPlaylist(httpClient, masterUrl);
-            for (String url : playlist.getNewTsUrls()) {
+            M3U8Playlist playlist = M3U8Parser.fetchPlaylist(httpClient, playlistRequest);
+            for (URI uri : playlist.getNewTsUrls()) {
                 if (isClosed) {
                     break;
                 }
                 // 仅新增的 ts 切片可以放入
-                if (!processedUrls.contains(url)) {
-                    InputStream tsData = M3U8Parser.fetchSegment(httpClient, url);
+                if (!processedUrls.contains(uri)) {
+                    InputStream tsData = M3U8Parser.fetchSegment(httpClient, uri, tsSegmentRequest);
                     segmentQueue.put(tsData);
-                    processedUrls.add(url);
+                    processedUrls.add(uri);
                 }
             }
 
