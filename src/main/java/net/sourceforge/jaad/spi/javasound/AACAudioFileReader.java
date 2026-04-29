@@ -276,6 +276,9 @@ public class AACAudioFileReader extends AudioFileReader {
 		    }
 			else throw e;
 		}
+		catch (Exception e){
+			throw new UnsupportedAudioFileException(e.getMessage());
+		}
 	}
 
 	@Override
