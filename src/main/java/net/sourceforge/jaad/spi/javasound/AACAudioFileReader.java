@@ -46,6 +46,9 @@ public class AACAudioFileReader extends AudioFileReader {
 										 Map<String, Object> fileProperties,
 										 Map<String, Object> formatProperties,
 										 boolean fileFormat) throws IOException {
+		if (!isAdtsAac(in)) {
+			throw new IllegalArgumentException("Unsupported format: Stream is not a valid ADTS AAC audio.");
+		}
 		ADTSDemultiplexer adts = new ADTSDemultiplexer(in);
 		Decoder decoder = Decoder.create(adts.getDecoderInfo());
 		SampleBuffer sampleBuffer = new SampleBuffer(decoder.getAudioFormat());
@@ -65,6 +68,31 @@ public class AACAudioFileReader extends AudioFileReader {
 			return new AudioFileFormat(AAC, audioFormat, NOT_SPECIFIED, fileProperties);
 		}
 		else return new AACAudioInputStream(adts, decoder, sampleBuffer, in, audioFormat, NOT_SPECIFIED);
+	}
+
+	/**
+	 * 检测提供的 InputStream 是否为 ADTS AAC 格式。
+	 * 前提条件：已移除开头的 ID3 标签，并且输入流支持 mark/reset 操作。
+	 */
+	private static boolean isAdtsAac(InputStream in) throws IOException {
+		in.mark(2);
+		byte[] header = new byte[2];
+		int read = in.read(header);
+		in.reset();
+
+		if (read < 2) {
+			return false;
+		}
+
+		int b0 = header[0] & 0xFF;
+		int b1 = header[1] & 0xFF;
+
+		// 第一个字节必须是 0xFF (即 1111 1111)
+		// 对于第二个字节，使用掩码 0xF6 (二进制 1111 0110) 进行精准匹配：
+		// - 高 4 位必须是 1111 (同步字的后半部分)
+		// - 第 1、2 位必须是 00 (代表 Layer == 00，这是区分 AAC 和 MP3 的关键)
+		// - 该掩码特意忽略了第 3 位 (ID位：区分 MPEG-2/4) 和第 0 位 (保护位：是否有 CRC校验)
+		return b0 == 0xFF && (b1 & 0xF6) == 0xF0;
 	}
 
 	private static void dumpDecoderConfigProperties(DecoderConfig config, Map<String, Object> formatProperties) {
